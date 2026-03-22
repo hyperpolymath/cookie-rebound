@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+= RSR Template Repository — Show Me The Receipts
+:toc:
+:icons: font
+
+The README makes claims. This file backs them up.
+
+[quote, README]
+____
+The AI reads the manifest, asks you a few questions, and handles everything.
+____
+
+== File Map
+
+[cols="1,2"]
+|===
+| Path | What's There
+
+| `src/` | Source code
+| `test(s)/` | Test suite
+|===
+
+== Questions?
+
+Open an issue or reach out directly — happy to explain anything in more detail.
