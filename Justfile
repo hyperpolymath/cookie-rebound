@@ -48,7 +48,7 @@ help recipe="":
 
 # Show this project's info
 info:
-    @echo "Project: {{project}}"
+    @echo "Project: cookie_rebound"
     @echo "Version: {{version}}"
     @echo "RSR Tier: {{tier}}"
     @echo "Recipes: $(just --summary | wc -w)"
@@ -266,7 +266,7 @@ init:
 
 # Build the project (debug mode)
 build *args:
-    @echo "Building {{project}} (debug)..."
+    @echo "Building cookie_rebound (debug)..."
     # TODO: Replace with your build command
     # Examples:
     #   cargo build {{args}}                    # Rust
@@ -277,7 +277,7 @@ build *args:
 
 # Build in release mode with optimizations
 build-release *args:
-    @echo "Building {{project}} (release)..."
+    @echo "Building cookie_rebound (release)..."
     # TODO: Replace with your release build command
     # Examples:
     #   cargo build --release {{args}}
@@ -385,7 +385,7 @@ run-verbose *args: build
 
 # Install to user path
 install: build-release
-    @echo "Installing {{project}}..."
+    @echo "Installing cookie_rebound..."
     # TODO: Replace with your install command
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -429,7 +429,7 @@ cookbook:
     #!/usr/bin/env bash
     mkdir -p docs
     OUTPUT="docs/just-cookbook.adoc"
-    echo "= {{project}} Justfile Cookbook" > "$OUTPUT"
+    echo "= cookie_rebound Justfile Cookbook" > "$OUTPUT"
     echo ":toc: left" >> "$OUTPUT"
     echo ":toclevels: 3" >> "$OUTPUT"
     echo "" >> "$OUTPUT"
@@ -455,10 +455,10 @@ cookbook:
 man:
     #!/usr/bin/env bash
     mkdir -p docs/man
-    cat > docs/man/{{project}}.1 << EOF
-    .TH {{project}} 1 "$(date +%Y-%m-%d)" "{{version}}" "{{project}} Manual"
+    cat > docs/man/cookie_rebound.1 << EOF
+    .TH cookie_rebound 1 "$(date +%Y-%m-%d)" "{{version}}" "cookie_rebound Manual"
     .SH NAME
-    {{project}} \- RSR-compliant project
+    cookie_rebound \- RSR-compliant project
     .SH SYNOPSIS
     .B just
     [recipe] [args...]
@@ -467,7 +467,7 @@ man:
     .SH AUTHOR
     $(git config user.name 2>/dev/null || echo "Author") <$(git config user.email 2>/dev/null || echo "email")>
     EOF
-    echo "Generated: docs/man/{{project}}.1"
+    echo "Generated: docs/man/cookie_rebound.1"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONTAINERS (stapeln ecosystem — Podman + Chainguard Wolfi)
@@ -497,14 +497,14 @@ container-init:
     fi
 
     # Prompt for container-specific values
-    read -rp "Service name (e.g. my-api) [{{project}}]: " _SERVICE_NAME
-    SERVICE_NAME="${_SERVICE_NAME:-{{project}}}"
+    read -rp "Service name (e.g. my-api) [cookie_rebound]: " _SERVICE_NAME
+    SERVICE_NAME="${_SERVICE_NAME:-cookie_rebound}"
 
     read -rp "Primary port [8080]: " _PORT
     PORT="${_PORT:-8080}"
 
-    read -rp "Container registry [ghcr.io/${OWNER:-{{OWNER}}}]: " _REGISTRY
-    REGISTRY="${_REGISTRY:-ghcr.io/${OWNER:-{{OWNER}}}}"
+    read -rp "Container registry [ghcr.io/${OWNER:-hyperpolymath}]: " _REGISTRY
+    REGISTRY="${_REGISTRY:-ghcr.io/${OWNER:-hyperpolymath}}"
 
     echo ""
     echo "  Service: $SERVICE_NAME"
@@ -547,9 +547,9 @@ container-build *args:
     if [ -f "container/ct-build.sh" ]; then
         cd container && ./ct-build.sh {{args}}
     elif [ -f "container/Containerfile" ]; then
-        podman build -t {{project}}:latest -f container/Containerfile .
+        podman build -t cookie_rebound:latest -f container/Containerfile .
     elif [ -f "Containerfile" ]; then
-        podman build -t {{project}}:latest -f Containerfile .
+        podman build -t cookie_rebound:latest -f Containerfile .
     else
         echo "No Containerfile found in container/ or project root"
         exit 1
@@ -611,12 +611,12 @@ container-push:
         cd container && ./ct-build.sh --push
     else
         echo "No container/ct-build.sh found — falling back to podman push"
-        podman push {{project}}:latest
+        podman push cookie_rebound:latest
     fi
 
 # Run container interactively (for debugging)
 container-run *args:
-    podman run --rm -it {{project}}:latest {{args}}
+    podman run --rm -it cookie_rebound:latest {{args}}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CI & AUTOMATION
@@ -833,7 +833,7 @@ test-matrix suite="unit" verbosity="normal" parallel="true":
     @echo "Test matrix: suite={{suite}} verbosity={{verbosity}} parallel={{parallel}}"
 
 # Container matrix: [build|run|push|shell|scan] x [registry] x [tag]
-container-matrix action="build" registry="ghcr.io/{{OWNER}}" tag="latest":
+container-matrix action="build" registry="ghcr.io/hyperpolymath" tag="latest":
     @echo "Container matrix: action={{action}} registry={{registry}} tag={{tag}}"
 
 # CI matrix: [lint|test|build|security|all] x [quick|full]
@@ -909,3 +909,102 @@ maint-assault:
 # Run panic-attacker pre-commit scan
 assail:
     @command -v panic-attack >/dev/null 2>&1 && panic-attack assail . || echo "panic-attack not found — install from https://github.com/hyperpolymath/panic-attacker"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ONBOARDING & DIAGNOSTICS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Check all required toolchain dependencies and report health
+doctor:
+    #!/usr/bin/env bash
+    echo "═══════════════════════════════════════════════════"
+    echo "  Cookie Rebound Doctor — Toolchain Health Check"
+    echo "═══════════════════════════════════════════════════"
+    echo ""
+    PASS=0; FAIL=0; WARN=0
+    check() {
+        local name="$1" cmd="$2" min="$3"
+        if command -v "$cmd" >/dev/null 2>&1; then
+            VER=$("$cmd" --version 2>&1 | head -1)
+            echo "  [OK]   $name — $VER"
+            PASS=$((PASS + 1))
+        else
+            echo "  [FAIL] $name — not found (need $min+)"
+            FAIL=$((FAIL + 1))
+        fi
+    }
+    check "just"              just      "1.25" 
+    check "git"               git       "2.40" 
+# Optional tools
+if command -v panic-attack >/dev/null 2>&1; then
+    echo "  [OK]   panic-attack — available"
+    PASS=$((PASS + 1))
+else
+    echo "  [WARN] panic-attack — not found (pre-commit scanner)"
+    WARN=$((WARN + 1))
+fi
+    echo ""
+    echo "  Result: $PASS passed, $FAIL failed, $WARN warnings"
+    if [ "$FAIL" -gt 0 ]; then
+        echo "  Run 'just heal' to attempt automatic repair."
+        exit 1
+    fi
+    echo "  All required tools present."
+
+# Attempt to automatically install missing tools
+heal:
+    #!/usr/bin/env bash
+    echo "═══════════════════════════════════════════════════"
+    echo "  Cookie Rebound Heal — Automatic Tool Installation"
+    echo "═══════════════════════════════════════════════════"
+    echo ""
+if ! command -v just >/dev/null 2>&1; then
+    echo "Installing just..."
+    cargo install just 2>/dev/null || echo "Install just from https://just.systems"
+fi
+    echo ""
+    echo "Heal complete. Run 'just doctor' to verify."
+
+# Guided tour of the project structure and key concepts
+tour:
+    #!/usr/bin/env bash
+    echo "═══════════════════════════════════════════════════"
+    echo "  Cookie Rebound — Guided Tour"
+    echo "═══════════════════════════════════════════════════"
+    echo ""
+    echo '**AI-Assisted Install:** Just tell any AI assistant: +'
+    echo ""
+    echo "Key directories:"
+    echo "  src/                      Source code" 
+    echo "  docs/                     Documentation" 
+    echo "  tests/                    Test suite" 
+    echo "  .github/workflows/        CI/CD workflows" 
+    echo "  .machine_readable/        Machine-readable metadata" 
+    echo "  container/                Container configuration" 
+    echo "  examples/                 Usage examples" 
+    echo ""
+    echo "Quick commands:"
+    echo "  just doctor    Check toolchain health"
+    echo "  just heal      Fix missing tools"
+    echo "  just help-me   Common workflows"
+    echo "  just default   List all recipes"
+    echo ""
+    echo "Read more: README.adoc, EXPLAINME.adoc"
+
+# Show help for common workflows
+help-me:
+    #!/usr/bin/env bash
+    echo "═══════════════════════════════════════════════════"
+    echo "  Cookie Rebound — Common Workflows"
+    echo "═══════════════════════════════════════════════════"
+    echo ""
+echo "FIRST TIME SETUP:"
+echo "  just doctor           Check toolchain"
+echo "  just heal             Fix missing tools"
+echo "" 
+echo "PRE-COMMIT:"
+echo "  just assail           Run panic-attacker scan"
+echo ""
+echo "LEARN:"
+echo "  just tour             Guided project tour"
+echo "  just default          List all recipes" 
