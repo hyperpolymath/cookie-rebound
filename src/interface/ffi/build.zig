@@ -1,5 +1,6 @@
-// {{PROJECT}} FFI Build Configuration
+// Cookie Rebound FFI Build Configuration
 // SPDX-License-Identifier: PMPL-1.0-or-later
+// Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 
 const std = @import("std");
 
@@ -9,7 +10,7 @@ pub fn build(b: *std.Build) void {
 
     // Shared library (.so, .dylib, .dll)
     const lib = b.addSharedLibrary(.{
-        .name = "{{project}}",
+        .name = "cookie_rebound",
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
@@ -20,7 +21,7 @@ pub fn build(b: *std.Build) void {
 
     // Static library (.a)
     const lib_static = b.addStaticLibrary(.{
-        .name = "{{project}}",
+        .name = "cookie_rebound",
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
@@ -30,14 +31,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(lib);
     b.installArtifact(lib_static);
 
-    // Generate header file for C compatibility
-    const header = b.addInstallHeader(
-        b.path("include/{{project}}.h"),
-        "{{project}}.h",
-    );
-    b.getInstallStep().dependOn(&header.step);
-
-    // Unit tests
+    // Unit tests (run tests embedded in main.zig)
     const lib_tests = b.addTest(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
@@ -46,22 +40,8 @@ pub fn build(b: *std.Build) void {
 
     const run_lib_tests = b.addRunArtifact(lib_tests);
 
-    const test_step = b.step("test", "Run library tests");
+    const test_step = b.step("test", "Run library unit tests");
     test_step.dependOn(&run_lib_tests.step);
-
-    // Integration tests
-    const integration_tests = b.addTest(.{
-        .root_source_file = b.path("test/integration_test.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
-    integration_tests.linkLibrary(lib);
-
-    const run_integration_tests = b.addRunArtifact(integration_tests);
-
-    const integration_test_step = b.step("test-integration", "Run integration tests");
-    integration_test_step.dependOn(&run_integration_tests.step);
 
     // Documentation
     const docs = b.addTest(.{
@@ -76,19 +56,4 @@ pub fn build(b: *std.Build) void {
         .install_dir = .prefix,
         .install_subdir = "docs",
     }).step);
-
-    // Benchmark (if needed)
-    const bench = b.addExecutable(.{
-        .name = "{{project}}-bench",
-        .root_source_file = b.path("bench/bench.zig"),
-        .target = target,
-        .optimize = .ReleaseFast,
-    });
-
-    bench.linkLibrary(lib);
-
-    const run_bench = b.addRunArtifact(bench);
-
-    const bench_step = b.step("bench", "Run benchmarks");
-    bench_step.dependOn(&run_bench.step);
 }

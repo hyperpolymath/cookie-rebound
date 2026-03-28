@@ -1,34 +1,34 @@
-= {{PROJECT_NAME}} - Citation Guide
+= Cookie Rebound - Citation Guide
 :toc:
 
 == BibTeX
 
 [source,bibtex]
 ----
-@software{{{PROJECT_NAME}}_{{CURRENT_YEAR}},
-  author = {{{AUTHOR_LAST}}, {{AUTHOR_FIRST}}},
-  title = {{{PROJECT_NAME}}},
-  year = {{{CURRENT_YEAR}}},
-  url = {https://github.com/{{OWNER}}/{{PROJECT_NAME}}},
+@software{Cookie Rebound_2026,
+  author = {Jewell, Jonathan D.A.},
+  title = {Cookie Rebound},
+  year = {2026},
+  url = {https://github.com/hyperpolymath/Cookie Rebound},
   license = {PMPL-1.0-or-later}
 }
 ----
 
 == Harvard Style
 
-{{AUTHOR_LAST}}, {{AUTHOR_INITIALS}} ({{CURRENT_YEAR}}) _{{PROJECT_NAME}}_ [Computer software]. Available at: https://github.com/{{OWNER}}/{{PROJECT_NAME}}
+Jewell, J. (2026) _Cookie Rebound_ [Computer software]. Available at: https://github.com/hyperpolymath/Cookie Rebound
 
 == OSCOLA
 
-{{AUTHOR}}, '{{PROJECT_NAME}}' ({{CURRENT_YEAR}}) <https://github.com/{{OWNER}}/{{PROJECT_NAME}}>
+Jonathan D.A. Jewell, 'Cookie Rebound' (2026) <https://github.com/hyperpolymath/Cookie Rebound>
 
 == MLA
 
-{{AUTHOR_LAST}}, {{AUTHOR_FIRST}} "{{PROJECT_NAME}}." {{CURRENT_YEAR}}, github.com/{{OWNER}}/{{PROJECT_NAME}}.
+Jewell, Jonathan D.A. "Cookie Rebound." 2026, github.com/hyperpolymath/Cookie Rebound.
 
 == APA 7
 
-{{AUTHOR_LAST}}, {{AUTHOR_INITIALS}} ({{CURRENT_YEAR}}). _{{PROJECT_NAME}}_ [Computer software]. GitHub. https://github.com/{{OWNER}}/{{PROJECT_NAME}}
+Jewell, J. (2026). _Cookie Rebound_ [Computer software]. GitHub. https://github.com/hyperpolymath/Cookie Rebound
 
 == See Also
 
