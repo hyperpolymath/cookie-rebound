@@ -114,7 +114,7 @@ const Cookie = struct {
 
     /// Serialize cookie to a JSON string
     fn toJson(self: *const Cookie, allocator: std.mem.Allocator) ![]u8 {
-        var buf = std.ArrayList(u8).init(allocator);
+        var buf = std.array_list.Managed(u8).init(allocator);
         defer buf.deinit();
         const writer = buf.writer();
 
@@ -165,7 +165,7 @@ const VaultHandle = struct {
     allocator: std.mem.Allocator,
     initialized: bool,
     cookies: std.StringHashMap(Cookie),
-    rules: std.ArrayList(ProtectionRule),
+    rules: std.array_list.Managed(ProtectionRule),
     vault_path: []const u8,
     rules_path: []const u8,
 
@@ -176,7 +176,7 @@ const VaultHandle = struct {
             .allocator = allocator,
             .initialized = true,
             .cookies = std.StringHashMap(Cookie).init(allocator),
-            .rules = std.ArrayList(ProtectionRule).init(allocator),
+            .rules = std.array_list.Managed(ProtectionRule).init(allocator),
             .vault_path = DEFAULT_VAULT_FILE,
             .rules_path = DEFAULT_RULES_FILE,
         };
@@ -234,30 +234,32 @@ const VaultHandle = struct {
         };
         defer file.close();
 
-        var buf_reader = std.io.bufferedReader(file.reader());
-        var reader = buf_reader.reader();
+        const content = file.readToEndAlloc(self.allocator, 64 * 1024 * 1024) catch return;
+        defer self.allocator.free(content);
 
-        var line_buf: [MAX_COOKIE_JSON_LEN]u8 = undefined;
-        while (true) {
-            const line = reader.readUntilDelimiterOrEof(&line_buf, '\n') catch break;
-            if (line == null) break;
-            const l = line.?;
-            if (l.len == 0) continue;
+        var start: usize = 0;
+        for (content, 0..) |c, i| {
+            if (c == '\n' or i == content.len - 1) {
+                const end = if (c == '\n') i else i + 1;
+                const l = content[start..end];
+                start = i + 1;
+                if (l.len == 0) continue;
 
-            var cookie = parseCookieJson(l, self.allocator) catch continue;
-            const k = cookie.makeKey(self.allocator) catch {
-                cookie.deinit(self.allocator);
-                continue;
-            };
-
-            if (self.cookies.contains(k)) {
-                self.allocator.free(k);
-                cookie.deinit(self.allocator);
-            } else {
-                self.cookies.put(k, cookie) catch {
-                    self.allocator.free(k);
-                    cookie.deinit(self.allocator);
+                var cookie_val = parseCookieJson(l, self.allocator) catch continue;
+                const k = cookie_val.makeKey(self.allocator) catch {
+                    cookie_val.deinit(self.allocator);
+                    continue;
                 };
+
+                if (self.cookies.contains(k)) {
+                    self.allocator.free(k);
+                    cookie_val.deinit(self.allocator);
+                } else {
+                    self.cookies.put(k, cookie_val) catch {
+                        self.allocator.free(k);
+                        cookie_val.deinit(self.allocator);
+                    };
+                }
             }
         }
     }
@@ -268,7 +270,7 @@ const VaultHandle = struct {
         defer file.close();
 
         for (self.rules.items) |rule| {
-            var buf = std.ArrayList(u8).init(self.allocator);
+            var buf = std.array_list.Managed(u8).init(self.allocator);
             defer buf.deinit();
             const writer = buf.writer();
             try writer.writeAll("{\"pattern\":\"");
@@ -286,20 +288,22 @@ const VaultHandle = struct {
         };
         defer file.close();
 
-        var buf_reader = std.io.bufferedReader(file.reader());
-        var reader = buf_reader.reader();
+        const content = file.readToEndAlloc(self.allocator, 64 * 1024 * 1024) catch return;
+        defer self.allocator.free(content);
 
-        var line_buf: [MAX_COOKIE_JSON_LEN]u8 = undefined;
-        while (true) {
-            const line = reader.readUntilDelimiterOrEof(&line_buf, '\n') catch break;
-            if (line == null) break;
-            const l = line.?;
-            if (l.len == 0) continue;
+        var start: usize = 0;
+        for (content, 0..) |c, i| {
+            if (c == '\n' or i == content.len - 1) {
+                const end = if (c == '\n') i else i + 1;
+                const l = content[start..end];
+                start = i + 1;
+                if (l.len == 0) continue;
 
-            var rule = parseRuleJson(l, self.allocator) catch continue;
-            self.rules.append(rule) catch {
-                rule.deinit(self.allocator);
-            };
+                var rule = parseRuleJson(l, self.allocator) catch continue;
+                self.rules.append(rule) catch {
+                    rule.deinit(self.allocator);
+                };
+            }
         }
     }
 };
@@ -355,7 +359,7 @@ fn jsonGetString(json: []const u8, field: []const u8, allocator: std.mem.Allocat
 
     // Find the closing quote (handle escaped quotes)
     var i: usize = value_start;
-    var result = std.ArrayList(u8).init(allocator);
+    var result = std.array_list.Managed(u8).init(allocator);
     errdefer result.deinit();
 
     while (i < json.len) {
@@ -596,7 +600,7 @@ fn inferConsentCategory(name: []const u8, domain: []const u8) ConsentCategory {
 /// Initialize the cookie vault.
 /// Creates the vault handle, loads existing data from disk.
 /// Returns an opaque pointer, or null on failure.
-export fn cookie_rebound_init() callconv(.C) ?*anyopaque {
+pub export fn cookie_rebound_init() callconv(.c) ?*anyopaque {
     const allocator = std.heap.c_allocator;
 
     const handle = VaultHandle.create(allocator) catch {
@@ -612,7 +616,7 @@ export fn cookie_rebound_init() callconv(.C) ?*anyopaque {
 
 /// Free the vault handle and all associated memory.
 /// Safe to call with null (no-op).
-export fn cookie_rebound_free(handle_ptr: ?*anyopaque) callconv(.C) void {
+pub export fn cookie_rebound_free(handle_ptr: ?*anyopaque) callconv(.c) void {
     const ptr = handle_ptr orelse return;
     // SAFETY: We only hand out VaultHandle pointers from cookie_rebound_init,
     // so this cast is valid for any non-null pointer we receive back.
@@ -624,7 +628,7 @@ export fn cookie_rebound_free(handle_ptr: ?*anyopaque) callconv(.C) void {
 
 /// Store a cookie in the vault from a JSON string.
 /// Overwrites if cookie with same domain+name already exists.
-export fn cookie_rebound_store(handle_ptr: ?*anyopaque, json_ptr: ?[*:0]const u8) callconv(.C) Result {
+pub export fn cookie_rebound_store(handle_ptr: ?*anyopaque, json_ptr: ?[*:0]const u8) callconv(.c) Result {
     const ptr = handle_ptr orelse {
         setError("Null handle");
         return .null_pointer;
@@ -684,7 +688,7 @@ export fn cookie_rebound_store(handle_ptr: ?*anyopaque, json_ptr: ?[*:0]const u8
 /// Retrieve a cookie by domain and name.
 /// Returns a newly allocated JSON string (caller must free with cookie_rebound_free_string),
 /// or null if not found.
-export fn cookie_rebound_get(handle_ptr: ?*anyopaque, domain_ptr: ?[*:0]const u8, name_ptr: ?[*:0]const u8) callconv(.C) ?[*:0]u8 {
+pub export fn cookie_rebound_get(handle_ptr: ?*anyopaque, domain_ptr: ?[*:0]const u8, name_ptr: ?[*:0]const u8) callconv(.c) ?[*:0]u8 {
     const ptr = handle_ptr orelse {
         setError("Null handle");
         return null;
@@ -739,7 +743,7 @@ export fn cookie_rebound_get(handle_ptr: ?*anyopaque, domain_ptr: ?[*:0]const u8
 
 /// List cookies matching a domain filter (empty string = all cookies).
 /// Returns a JSON array string. Caller must free with cookie_rebound_free_string.
-export fn cookie_rebound_list(handle_ptr: ?*anyopaque, filter_ptr: ?[*:0]const u8) callconv(.C) ?[*:0]u8 {
+pub export fn cookie_rebound_list(handle_ptr: ?*anyopaque, filter_ptr: ?[*:0]const u8) callconv(.c) ?[*:0]u8 {
     const ptr = handle_ptr orelse {
         setError("Null handle");
         return null;
@@ -758,7 +762,7 @@ export fn cookie_rebound_list(handle_ptr: ?*anyopaque, filter_ptr: ?[*:0]const u
     const filter = std.mem.span(filter_cstr);
     const match_all = filter.len == 0;
 
-    var buf = std.ArrayList(u8).init(handle.allocator);
+    var buf = std.array_list.Managed(u8).init(handle.allocator);
     defer buf.deinit();
     const writer = buf.writer();
 
@@ -808,7 +812,7 @@ export fn cookie_rebound_list(handle_ptr: ?*anyopaque, filter_ptr: ?[*:0]const u
 }
 
 /// Delete a cookie by domain and name.
-export fn cookie_rebound_delete(handle_ptr: ?*anyopaque, domain_ptr: ?[*:0]const u8, name_ptr: ?[*:0]const u8) callconv(.C) Result {
+pub export fn cookie_rebound_delete(handle_ptr: ?*anyopaque, domain_ptr: ?[*:0]const u8, name_ptr: ?[*:0]const u8) callconv(.c) Result {
     const ptr = handle_ptr orelse {
         setError("Null handle");
         return .null_pointer;
@@ -857,7 +861,7 @@ export fn cookie_rebound_delete(handle_ptr: ?*anyopaque, domain_ptr: ?[*:0]const
 
 /// Add a protection rule from JSON.
 /// JSON format: {"pattern":"*.example.com","action":"protect"} or {"pattern":"*","action":0}
-export fn cookie_rebound_add_rule(handle_ptr: ?*anyopaque, json_ptr: ?[*:0]const u8) callconv(.C) Result {
+pub export fn cookie_rebound_add_rule(handle_ptr: ?*anyopaque, json_ptr: ?[*:0]const u8) callconv(.c) Result {
     const ptr = handle_ptr orelse {
         setError("Null handle");
         return .null_pointer;
@@ -896,7 +900,7 @@ export fn cookie_rebound_add_rule(handle_ptr: ?*anyopaque, json_ptr: ?[*:0]const
 
 /// Apply all protection rules to the vault.
 /// Returns a JSON report: {"protected":N,"ignored":N,"deleted":N}
-export fn cookie_rebound_apply_rules(handle_ptr: ?*anyopaque) callconv(.C) ?[*:0]u8 {
+pub export fn cookie_rebound_apply_rules(handle_ptr: ?*anyopaque) callconv(.c) ?[*:0]u8 {
     const ptr = handle_ptr orelse {
         setError("Null handle");
         return null;
@@ -913,7 +917,7 @@ export fn cookie_rebound_apply_rules(handle_ptr: ?*anyopaque) callconv(.C) ?[*:0
     var deleted: u32 = 0;
 
     // Collect keys to delete (cannot modify HashMap during iteration)
-    var to_delete = std.ArrayList([]const u8).init(handle.allocator);
+    var to_delete = std.array_list.Managed([]const u8).init(handle.allocator);
     defer to_delete.deinit();
 
     var cookie_iter = handle.cookies.iterator();
@@ -970,7 +974,7 @@ export fn cookie_rebound_apply_rules(handle_ptr: ?*anyopaque) callconv(.C) ?[*:0
     }
 
     // Build report JSON
-    var buf = std.ArrayList(u8).init(handle.allocator);
+    var buf = std.array_list.Managed(u8).init(handle.allocator);
     defer buf.deinit();
     const writer = buf.writer();
     writer.print("{{\"protected\":{d},\"ignored\":{d},\"deleted\":{d}}}", .{ protected, ignored, deleted }) catch {
@@ -990,7 +994,7 @@ export fn cookie_rebound_apply_rules(handle_ptr: ?*anyopaque) callconv(.C) ?[*:0
 
 /// Analyse cookies for a given domain.
 /// Returns a JSON analysis report with tracking detection, expiry audit, and risk assessment.
-export fn cookie_rebound_analyse(handle_ptr: ?*anyopaque, domain_ptr: ?[*:0]const u8) callconv(.C) ?[*:0]u8 {
+pub export fn cookie_rebound_analyse(handle_ptr: ?*anyopaque, domain_ptr: ?[*:0]const u8) callconv(.c) ?[*:0]u8 {
     const ptr = handle_ptr orelse {
         setError("Null handle");
         return null;
@@ -1009,7 +1013,7 @@ export fn cookie_rebound_analyse(handle_ptr: ?*anyopaque, domain_ptr: ?[*:0]cons
     const domain = std.mem.span(domain_cstr);
     const now: u64 = @intCast(std.time.timestamp());
 
-    var buf = std.ArrayList(u8).init(handle.allocator);
+    var buf = std.array_list.Managed(u8).init(handle.allocator);
     defer buf.deinit();
     const writer = buf.writer();
 
@@ -1078,7 +1082,7 @@ export fn cookie_rebound_analyse(handle_ptr: ?*anyopaque, domain_ptr: ?[*:0]cons
 /// Export cookies from vault to a browser cookie file.
 /// For Firefox: writes a cookies.txt (Netscape format) to the given profile path.
 /// For Chrome: writes a cookies.json (simplified format) to the given profile path.
-export fn cookie_rebound_export_browser(handle_ptr: ?*anyopaque, browser_type: u32, path_ptr: ?[*:0]const u8) callconv(.C) Result {
+pub export fn cookie_rebound_export_browser(handle_ptr: ?*anyopaque, browser_type: u32, path_ptr: ?[*:0]const u8) callconv(.c) Result {
     const ptr = handle_ptr orelse {
         setError("Null handle");
         return .null_pointer;
@@ -1112,51 +1116,46 @@ export fn cookie_rebound_export_browser(handle_ptr: ?*anyopaque, browser_type: u
         return .invalid_param;
     };
 
-    var file = std.fs.cwd().createFile(full_path, .{}) catch {
-        setError("Failed to create export file");
-        return .storage_error;
-    };
-    defer file.close();
-
-    const file_writer = file.writer();
+    // Build output in memory, then write all at once
+    var out = std.array_list.Managed(u8).init(handle.allocator);
+    defer out.deinit();
+    const w = out.writer();
 
     switch (browser) {
         .firefox => {
             // Netscape cookie file format
-            file_writer.writeAll("# Netscape HTTP Cookie File\n# Exported by cookie-rebound\n\n") catch {
-                setError("Failed to write header");
-                return .storage_error;
+            w.writeAll("# Netscape HTTP Cookie File\n# Exported by cookie-rebound\n\n") catch {
+                setError("Failed to build export");
+                return .out_of_memory;
             };
             var cookie_iter = handle.cookies.iterator();
             while (cookie_iter.next()) |entry| {
                 const c = entry.value_ptr;
-                // Format: domain\tflag\tpath\tsecure\texpiry\tname\tvalue
                 const domain_flag = if (std.mem.startsWith(u8, c.domain, ".")) "TRUE" else "FALSE";
                 const secure_flag = if (c.secure) "TRUE" else "FALSE";
                 const expiry = if (c.expires_at) |exp| exp else 0;
 
-                file_writer.print("{s}\t{s}\t{s}\t{s}\t{d}\t{s}\t{s}\n", .{
+                w.print("{s}\t{s}\t{s}\t{s}\t{d}\t{s}\t{s}\n", .{
                     c.domain, domain_flag, c.path, secure_flag, expiry, c.name, c.value,
                 }) catch {
-                    setError("Failed to write cookie");
-                    return .storage_error;
+                    setError("Failed to build export");
+                    return .out_of_memory;
                 };
             }
         },
         .chrome => {
-            // JSON array format for Chrome
-            file_writer.writeAll("[\n") catch {
-                setError("Failed to write header");
-                return .storage_error;
+            w.writeAll("[\n") catch {
+                setError("Failed to build export");
+                return .out_of_memory;
             };
             var first = true;
             var cookie_iter = handle.cookies.iterator();
             while (cookie_iter.next()) |entry| {
                 const c = entry.value_ptr;
                 if (!first) {
-                    file_writer.writeAll(",\n") catch {
-                        setError("Write error");
-                        return .storage_error;
+                    w.writeAll(",\n") catch {
+                        setError("Failed to build export");
+                        return .out_of_memory;
                     };
                 }
                 const json = c.toJson(handle.allocator) catch {
@@ -1164,18 +1163,28 @@ export fn cookie_rebound_export_browser(handle_ptr: ?*anyopaque, browser_type: u
                     return .out_of_memory;
                 };
                 defer handle.allocator.free(json);
-                file_writer.writeAll(json) catch {
-                    setError("Write error");
-                    return .storage_error;
+                w.writeAll(json) catch {
+                    setError("Failed to build export");
+                    return .out_of_memory;
                 };
                 first = false;
             }
-            file_writer.writeAll("\n]\n") catch {
-                setError("Write error");
-                return .storage_error;
+            w.writeAll("\n]\n") catch {
+                setError("Failed to build export");
+                return .out_of_memory;
             };
         },
     }
+
+    var file = std.fs.cwd().createFile(full_path, .{}) catch {
+        setError("Failed to create export file");
+        return .storage_error;
+    };
+    defer file.close();
+    file.writeAll(out.items) catch {
+        setError("Failed to write export file");
+        return .storage_error;
+    };
 
     clearError();
     return .ok;
@@ -1184,7 +1193,7 @@ export fn cookie_rebound_export_browser(handle_ptr: ?*anyopaque, browser_type: u
 /// Import cookies from a browser profile directory into the vault.
 /// For Firefox: reads cookies_export.txt (Netscape format).
 /// For Chrome: reads cookies_export.json (JSON array).
-export fn cookie_rebound_import_browser(handle_ptr: ?*anyopaque, browser_type: u32, path_ptr: ?[*:0]const u8) callconv(.C) Result {
+pub export fn cookie_rebound_import_browser(handle_ptr: ?*anyopaque, browser_type: u32, path_ptr: ?[*:0]const u8) callconv(.c) Result {
     const ptr = handle_ptr orelse {
         setError("Null handle");
         return .null_pointer;
@@ -1225,14 +1234,19 @@ export fn cookie_rebound_import_browser(handle_ptr: ?*anyopaque, browser_type: u
 
     switch (browser) {
         .firefox => {
-            // Parse Netscape cookie file format
-            var buf_reader = std.io.bufferedReader(file.reader());
-            var reader = buf_reader.reader();
-            var line_buf: [MAX_COOKIE_JSON_LEN]u8 = undefined;
-            while (true) {
-                const line = reader.readUntilDelimiterOrEof(&line_buf, '\n') catch break;
-                if (line == null) break;
-                const l = line.?;
+            // Parse Netscape cookie file format — load entire file
+            const ff_content = file.readToEndAlloc(handle.allocator, 64 * 1024 * 1024) catch {
+                setError("Failed to read import file");
+                return .storage_error;
+            };
+            defer handle.allocator.free(ff_content);
+
+            var line_start: usize = 0;
+            for (ff_content, 0..) |ch, idx2| {
+                if (ch != '\n' and idx2 != ff_content.len - 1) continue;
+                const line_end = if (ch == '\n') idx2 else idx2 + 1;
+                const l = ff_content[line_start..line_end];
+                line_start = idx2 + 1;
                 if (l.len == 0 or l[0] == '#') continue;
 
                 // Parse tab-separated: domain, flag, path, secure, expiry, name, value
@@ -1260,7 +1274,7 @@ export fn cookie_rebound_import_browser(handle_ptr: ?*anyopaque, browser_type: u
                 const now: u64 = @intCast(std.time.timestamp());
 
                 // Build a JSON string and store via parseCookieJson
-                var json_buf = std.ArrayList(u8).init(handle.allocator);
+                var json_buf = std.array_list.Managed(u8).init(handle.allocator);
                 defer json_buf.deinit();
                 const w = json_buf.writer();
                 w.writeAll("{\"name\":\"") catch continue;
@@ -1366,7 +1380,7 @@ export fn cookie_rebound_import_browser(handle_ptr: ?*anyopaque, browser_type: u
 }
 
 /// Free a string allocated by cookie_rebound_get / cookie_rebound_list / etc.
-export fn cookie_rebound_free_string(str_ptr: ?[*:0]u8) callconv(.C) void {
+pub export fn cookie_rebound_free_string(str_ptr: ?[*:0]u8) callconv(.c) void {
     const s = str_ptr orelse return;
     const allocator = std.heap.c_allocator;
     const slice = std.mem.span(s);
@@ -1376,7 +1390,7 @@ export fn cookie_rebound_free_string(str_ptr: ?[*:0]u8) callconv(.C) void {
 
 /// Check if vault handle is initialized.
 /// Returns 1 if initialized, 0 otherwise.
-export fn cookie_rebound_is_initialized(handle_ptr: ?*anyopaque) callconv(.C) u32 {
+pub export fn cookie_rebound_is_initialized(handle_ptr: ?*anyopaque) callconv(.c) u32 {
     const ptr = handle_ptr orelse return 0;
     // SAFETY: handle_ptr came from cookie_rebound_init
     const handle: *VaultHandle = @ptrCast(@alignCast(ptr));
@@ -1384,13 +1398,13 @@ export fn cookie_rebound_is_initialized(handle_ptr: ?*anyopaque) callconv(.C) u3
 }
 
 /// Get the library version string (static, do not free).
-export fn cookie_rebound_version() callconv(.C) [*:0]const u8 {
+pub export fn cookie_rebound_version() callconv(.c) [*:0]const u8 {
     return VERSION;
 }
 
 /// Get the last error message.
 /// Returns null if no error. The returned pointer is valid until the next FFI call.
-export fn cookie_rebound_last_error() callconv(.C) ?[*:0]const u8 {
+pub export fn cookie_rebound_last_error() callconv(.c) ?[*:0]const u8 {
     const err = last_error orelse return null;
     const allocator = std.heap.c_allocator;
     const c_str = allocator.allocSentinel(u8, err.len, 0) catch return null;

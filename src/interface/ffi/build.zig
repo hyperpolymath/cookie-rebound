@@ -8,34 +8,44 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // Shared library (.so, .dylib, .dll)
-    const lib = b.addSharedLibrary(.{
-        .name = "cookie_rebound",
+    // Create the root module used by library and tests
+    const root_module = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
 
-    // Set version
-    lib.version = .{ .major = 0, .minor = 1, .patch = 0 };
+    // Shared library (.so, .dylib, .dll)
+    const lib = b.addLibrary(.{
+        .name = "cookie_rebound",
+        .root_module = root_module,
+        .linkage = .dynamic,
+    });
+    b.installArtifact(lib);
 
     // Static library (.a)
-    const lib_static = b.addStaticLibrary(.{
+    const lib_static = b.addLibrary(.{
         .name = "cookie_rebound",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+        .linkage = .static,
     });
-
-    // Install artifacts
-    b.installArtifact(lib);
     b.installArtifact(lib_static);
 
     // Unit tests (run tests embedded in main.zig)
-    const lib_tests = b.addTest(.{
+    const test_module = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
+    });
+    const lib_tests = b.addTest(.{
+        .root_module = test_module,
     });
 
     const run_lib_tests = b.addRunArtifact(lib_tests);
@@ -43,17 +53,26 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run library unit tests");
     test_step.dependOn(&run_lib_tests.step);
 
-    // Documentation
-    const docs = b.addTest(.{
-        .root_source_file = b.path("src/main.zig"),
+    // Integration tests
+    const integration_mod = b.createModule(.{
+        .root_source_file = b.path("test/integration_test.zig"),
         .target = target,
-        .optimize = .Debug,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    integration_mod.addImport("cookie_rebound", root_module);
+
+    const integration_tests = b.addTest(.{
+        .root_module = integration_mod,
     });
 
-    const docs_step = b.step("docs", "Generate documentation");
-    docs_step.dependOn(&b.addInstallDirectory(.{
-        .source_dir = docs.getEmittedDocs(),
-        .install_dir = .prefix,
-        .install_subdir = "docs",
-    }).step);
+    const run_integration_tests = b.addRunArtifact(integration_tests);
+
+    const integration_test_step = b.step("test-integration", "Run integration tests");
+    integration_test_step.dependOn(&run_integration_tests.step);
+
+    // All tests
+    const all_test_step = b.step("test-all", "Run all tests (unit + integration)");
+    all_test_step.dependOn(&run_lib_tests.step);
+    all_test_step.dependOn(&run_integration_tests.step);
 }

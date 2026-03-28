@@ -18,6 +18,14 @@ Thumbs.db
 /dist/
 /out/
 
+# Zig
+zig-out/
+.zig-cache/
+
+# Cookie vault data files (runtime, not source)
+cookie_vault.jsonl
+cookie_rules.jsonl
+
 # Dependencies
 /node_modules/
 /vendor/

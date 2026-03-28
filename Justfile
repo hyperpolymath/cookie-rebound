@@ -264,41 +264,28 @@ init:
 # BUILD & COMPILE
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Build the project (debug mode)
+# Build the Zig FFI shared + static library (debug mode)
 build *args:
-    @echo "Building cookie_rebound (debug)..."
-    # TODO: Replace with your build command
-    # Examples:
-    #   cargo build {{args}}                    # Rust
-    #   mix compile {{args}}                    # Elixir
-    #   zig build {{args}}                      # Zig
-    #   deno task build {{args}}                # Deno/ReScript
-    @echo "Build complete"
+    @echo "Building libcookie_rebound (debug)..."
+    cd src/interface/ffi && zig build {{args}}
+    @echo "Build complete: src/interface/ffi/zig-out/lib/"
 
 # Build in release mode with optimizations
 build-release *args:
-    @echo "Building cookie_rebound (release)..."
-    # TODO: Replace with your release build command
-    # Examples:
-    #   cargo build --release {{args}}
-    #   MIX_ENV=prod mix compile {{args}}
-    #   zig build -Doptimize=ReleaseFast {{args}}
-    @echo "Release build complete"
+    @echo "Building libcookie_rebound (release)..."
+    cd src/interface/ffi && zig build -Doptimize=ReleaseFast {{args}}
+    @echo "Release build complete: src/interface/ffi/zig-out/lib/"
 
-# Build and watch for changes (requires entr or similar)
+# Build and watch for changes (requires entr)
 build-watch:
     @echo "Watching for changes..."
-    # TODO: Customize file patterns for your language
-    # Examples:
-    #   find src -name '*.rs' | entr -c just build
-    #   mix compile --force --warnings-as-errors
-    #   deno task dev
+    find src/interface/ffi/src -name '*.zig' | entr -c just build
 
 # Clean build artifacts [reversible: rebuild with `just build`]
 clean:
     @echo "Cleaning..."
-    # TODO: Customize for your build system
-    rm -rf target/ _build/ build/ dist/ out/ obj/ bin/
+    rm -rf src/interface/ffi/zig-out src/interface/ffi/.zig-cache
+    rm -f cookie_vault.jsonl cookie_rules.jsonl
 
 # Deep clean including caches [reversible: rebuild]
 clean-all: clean
@@ -308,16 +295,11 @@ clean-all: clean
 # TEST & QUALITY
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Run all tests
+# Run all Zig unit and integration tests
 test *args:
-    @echo "Running tests..."
-    # TODO: Replace with your test command
-    # Examples:
-    #   cargo test {{args}}
-    #   mix test {{args}}
-    #   zig build test {{args}}
-    #   deno test {{args}}
-    @echo "Tests passed!"
+    @echo "Running cookie-rebound tests..."
+    cd src/interface/ffi && zig build test-all {{args}}
+    @echo "All tests passed!"
 
 # Run tests with verbose output
 test-verbose:
@@ -332,6 +314,18 @@ test-smoke:
 # Run all quality checks
 quality: fmt-check lint test
     @echo "All quality checks passed!"
+
+# Type-check Idris2 ABI definitions (requires idris2)
+check-abi:
+    #!/usr/bin/env bash
+    if command -v idris2 &>/dev/null; then
+        echo "Type-checking Idris2 ABI..."
+        cd src/interface/abi && idris2 --check Types.idr && echo "Types.idr OK"
+        cd src/interface/abi && idris2 --check Layout.idr && echo "Layout.idr OK"
+        cd src/interface/abi && idris2 --check Foreign.idr && echo "Foreign.idr OK"
+    else
+        echo "idris2 not found; skipping ABI type-check"
+    fi
 
 # Fix all auto-fixable issues [reversible: git checkout]
 fix: fmt
