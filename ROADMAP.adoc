@@ -1,22 +1,83 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
-= YOUR Template Repo Roadmap
+= cookie-rebound Roadmap
+:toc:
+:toclevels: 3
+:author: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
-== Current Status
+== Overview
 
-Initial development phase.
+cookie-rebound verifies that website cookie consent banners actually do what they claim. It scans cookie behaviour before and after consent interaction, detecting dark patterns such as pre-ticked boxes, ignored rejections, and tracking cookies set before consent is granted. Built with Idris2 ABI proofs, Zig FFI, and JSONL storage.
+
+== Current State (2026-03-29)
+
+**Status: v1.0 COMPLETE** (completed 2026-03-28)
+
+=== What Works
+
+* Idris2 ABI definitions with dependent type proofs (`src/interface/abi/Types.idr`, `Layout.idr`, `Foreign.idr`)
+* Zig FFI implementation (`src/interface/ffi/src/main.zig`) with build system and integration tests
+* Cookie consent verification logic
+* JSONL storage backend for scan results
+* 35 tests passing
+* Full RSR compliance (17 workflows, contractiles, AI manifest)
+* Dual-track architecture (human-readable root + machine-readable `.machine_readable/`)
 
 == Milestones
 
-=== v0.1.0 - Foundation
-* [ ] Core functionality
-* [ ] Basic documentation
-* [ ] CI/CD pipeline
+=== v1.0.0 — Core Verification (COMPLETE)
 
-=== v1.0.0 - Stable Release
-* [ ] Full feature set
-* [ ] Comprehensive tests
-* [ ] Production ready
+* [x] Idris2 ABI definitions with dependent type proofs
+* [x] Zig FFI bridge (C-compatible, zero runtime dependencies)
+* [x] Cookie consent verification logic
+* [x] JSONL storage for scan results
+* [x] 35 tests passing
+* [x] Generated C headers from ABI
+* [x] RSR template compliance (17 workflows)
+* [x] AI Gatekeeper Protocol (0-AI-MANIFEST.a2ml)
+* [x] Contractile system (Mustfile, Trustfile, Dustfile, Intentfile)
+* [x] Stapeln container ecosystem files (selur-compose, vordr, rokur)
+* [x] CI/CD pipeline
+* [x] Documentation
 
-== Future Directions
+=== v1.1.0 — Browser Integration (PLANNED)
 
-_To be determined based on community feedback._
+* [ ] Groove browser extension integration (localhost bridge, MPL-2.0)
+* [ ] FireFlag cross-reference (flag consent databases)
+* [ ] Real-time consent monitoring (watch cookies change as user navigates)
+* [ ] GDPR/ePrivacy compliance scoring
+* [ ] Dark pattern taxonomy (pre-ticked, ignored rejection, stealth tracking, confusing UI)
+
+=== v1.2.0 — Reporting (PLANNED)
+
+* [ ] HTML report generation (visual summary of consent violations)
+* [ ] SARIF output for CI/CD integration
+* [ ] VeriSimDB persistence (scan history, temporal tracking)
+* [ ] PanLL Panel-W module (consent scan results as event chains)
+* [ ] claim-forge timestamping (GPG + OpenTimestamps for evidence)
+
+=== v2.0.0 — Scale (PLANNED)
+
+* [ ] Batch scanning (crawl entire domains, sitemap-aware)
+* [ ] Historical consent tracking via VeriSimDB (temporal modality)
+* [ ] Public reporting API (JSON-RPC or REST)
+* [ ] BoJ server cartridge (MCP protocol access)
+* [ ] Comparative analysis (track consent compliance changes over time)
+* [ ] Multi-jurisdiction support (GDPR, CCPA, LGPD, POPIA)
+
+== Post-v2.0
+
+* **Academic contribution** — Dataset of consent banner compliance across top sites
+* **Regulatory integration** — Export evidence packages for DPA complaints
+* **Community scanning** — Shared consent compliance database (opt-in)
+
+== License & Governance
+
+**License:** PMPL-1.0-or-later (Palimpsest License)
+
+**Author:** Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+**Repository:** https://github.com/hyperpolymath/cookie-rebound
+
+---
+
+_Last Updated: 2026-03-29_
