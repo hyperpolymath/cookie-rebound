@@ -1,4 +1,5 @@
 # Test & Benchmark Requirements
+## CRG Grade: C — ACHIEVED 2026-04-04
 
 ## Current State
 - Unit tests: 1 Zig integration test (274 lines) — count unknown (zig test not run)
