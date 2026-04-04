@@ -1,25 +1,191 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
-= RSR Template Repository — Show Me The Receipts
+= cookie-rebound — Show Me The Receipts
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 :toc:
 :icons: font
 
 The README makes claims. This file backs them up.
 
-[quote, README]
+== Cookie Vault with Formally Verified ABI
+
+[quote, src/interface/abi/Foreign.idr]
 ____
-The AI reads the manifest, asks you a few questions, and handles everything.
+This module declares all C-compatible functions implemented in the Zig FFI layer.
+Each function has a primitive FFI binding and a safe wrapper that enforces
+handle validity and error propagation through the Idris2 type system.
+The Zig implementation lives in src/interface/ffi/src/main.zig.
 ____
+
+Cookie Rebound is an HTTP cookie vault: it stores, retrieves, lists, deletes,
+and analyses cookies by domain, and applies selective protection rules
+(protect / ignore / delete by glob pattern). The ABI is specified in Idris2
+(`src/interface/abi/Types.idr`, `Layout.idr`, `Foreign.idr`) and implemented
+in Zig (`src/interface/ffi/src/main.zig`), with compiled shared objects
+(`libcookie_rebound.so`, `libcookie_rebound.a`) in the Zig build output.
+The Idris2 layer provides dependent-type proofs of enum round-trips, handle
+non-nullness, and struct alignment — guarantees impossible to express in C
+or Zig alone.
+
+The complete call chain is: Idris2 safe wrapper (e.g. `store`) → strips to
+primitive FFI call via `%foreign "C:cookie_rebound_store, libcookie_rebound"`
+→ Zig implementation in `main.zig` → JSONL storage file. The Zig layer
+handles all memory allocation; the Idris2 `get`, `list`, and `analyse`
+wrappers call `prim__freeString` immediately after consuming the returned
+C-string pointer to prevent leaks.
+
+**Caveat:** The Zig implementation in `src/interface/ffi/src/main.zig` is
+the only production-ready layer. The `ffi/zig/bench/cookie_bench.zig` file
+provides standalone Zig benchmarks but the Idris2 `Foreign.idr` wrappers are
+not yet tested end-to-end with an Idris2 executable — they are type-checked
+by the Idris2 compiler but the full integration test (`tests/e2e_test.sh`)
+drives the Zig library directly via shell. Browser import/export
+(`importBrowser`, `exportBrowser`) for Firefox (`cookies.sqlite`) and Chrome
+(`Cookies` database) are declared in the ABI but the Zig implementation
+details require SQLite access.
+
+- ABI types: `src/interface/abi/Types.idr` (Cookie, SameSitePolicy, RuleAction, ConsentCategory, BrowserType, Handle, ProtectionRule, CookieAnalysis)
+- ABI layout proofs: `src/interface/abi/Layout.idr` (memory layout verification)
+- ABI FFI declarations: `src/interface/abi/Foreign.idr` (all prim__ bindings + safe wrappers)
+- Zig implementation: `src/interface/ffi/src/main.zig`
+- Zig build: `src/interface/ffi/build.zig`
+- Learn more: https://www.rfc-editor.org/rfc/rfc6265 (HTTP Cookies spec), https://idris2.readthedocs.io
+
+== Dependent Types Prove ABI Correctness
+
+[quote, src/interface/abi/Types.idr]
+____
+||| Round-trip proof: resultFromInt (resultToInt r) = Just r
+public export
+resultRoundTrip : (r : Result) -> resultFromInt (resultToInt r) = Just r
+resultRoundTrip Ok = Refl
+...
+____
+
+Every enum type in the ABI (`Result`, `SameSitePolicy`, `RuleAction`,
+`ConsentCategory`, `BrowserType`) has a machine-checked round-trip proof
+by exhaustive case analysis, producing `Refl` at each constructor. This
+guarantees that no integer value can be silently misinterpreted as the wrong
+enum variant when crossing the C ABI boundary. The `Handle` type uses
+`So (ptr /= 0)` as a compile-time precondition — `createHandle` returns
+`Nothing` for null pointers, and `MkHandle` can only be constructed with
+proof that the pointer is non-zero.
+
+Additionally, `Verify.resultCodesDistinct` proves that all eight `Result`
+constructors map to distinct integer values (no aliasing). The
+`cookieAlignment` function proves `HasAlignment Cookie 8` for all platforms
+— the 72-byte C struct layout is documented inline in the module comment.
+
+**Caveat:** The proofs use `Refl` by exhaustive case split, which is complete
+but would need to be re-proven if new constructors are added to any enum. The
+`%runElab do pure Linux` platform detection is a stub — actual compile-time
+platform selection requires additional elaborator scripts or compiler flags.
+
+- Round-trip proofs: `src/interface/abi/Types.idr:87–95` (Result), `:163–167` (SameSitePolicy), `:236–240` (RuleAction), `:292–297` (ConsentCategory), `:342–345` (BrowserType)
+- Handle non-null proof: `src/interface/abi/Types.idr:118–128` (So (ptr /= 0))
+- ABI distinctness proof: `src/interface/abi/Types.idr:409–421` (resultCodesDistinct)
+- Memory layout: `src/interface/abi/Types.idr:383–391` (cookieAlignment)
+
+== GDPR/ePrivacy Consent Classification
+
+[quote, src/interface/abi/Types.idr]
+____
+||| Cookie consent category per GDPR/ePrivacy classification
+data ConsentCategory : Type where
+  Necessary : ConsentCategory
+  Functional : ConsentCategory
+  Analytics : ConsentCategory
+  Marketing : ConsentCategory
+  Unknown : ConsentCategory
+____
+
+The `CookieAnalysis` record produced by the Zig `cookie_rebound_analyse`
+function carries four fields: `isTracker` (likely a fingerprinting or ad-network
+cookie), `isExpired` (past its Unix timestamp), `crossSiteRisk`
+(`SameSite=None` without `Secure`), and `consentCategory` (GDPR
+classification). This makes cookie-rebound a candidate building block for
+consent management and tracker-blocking tools, not just a raw storage vault.
+
+**Caveat:** The tracker detection heuristic in the Zig layer is pattern-based
+(domain lists, known tracking suffixes) rather than behavioural. It does not
+perform network requests or validate against a live blocklist. The consent
+category is inferred, not declared by the site — `Unknown` is the safe fallback.
+
+- Analysis type: `src/interface/abi/Types.idr:302–318` (CookieAnalysis record)
+- FFI binding: `src/interface/abi/Foreign.idr:173–188` (analyse wrapper)
+- Learn more: https://gdpr-info.eu/art-6-gdpr/ (lawful basis for cookie consent)
+
+== Compiled Library Artefacts Are Present
+
+[quote, src/interface/ffi/.zig-cache/]
+____
+zig-out/lib/libcookie_rebound.a
+zig-out/lib/libcookie_rebound.so
+____
+
+The Zig build has been run: compiled static and shared libraries exist in
+`src/interface/ffi/zig-out/lib/`. Multiple `.zig-cache/` entries confirm
+real build activity across at least six cache slots. The presence of
+`libcookie_rebound.a` and `libcookie_rebound.so` means the Zig FFI layer
+is functional — a downstream consumer can link against these artefacts
+today without rebuilding.
+
+**Caveat:** These compiled artefacts are for the build machine's native
+architecture (likely x86_64 Linux). Cross-compilation for WASM or other
+platforms listed in `Types.idr` (`Platform`) requires passing the appropriate
+Zig target triple to `zig build -Dtarget=...`. The artefacts in the repo
+tree should not be committed in a published release — they are development
+build outputs.
+
+- Static library: `src/interface/ffi/zig-out/lib/libcookie_rebound.a`
+- Shared library: `src/interface/ffi/zig-out/lib/libcookie_rebound.so`
+- Zig benchmark: `ffi/zig/bench/cookie_bench.zig`
+
+== Dogfooded Across The Account
+
+[cols="1,2"]
+|===
+| Technology | Also Used In
+
+| **Idris2 ABI (dependent types)** | https://github.com/hyperpolymath/gossamer[gossamer], https://github.com/hyperpolymath/stapeln[stapeln], https://github.com/hyperpolymath/groove[groove] — all use the same Idris2-ABI / Zig-FFI architecture
+
+| **Zig FFI + C ABI** | https://github.com/hyperpolymath/groove[groove] (Groove protocol FFI), https://github.com/hyperpolymath/stapeln[stapeln] (container FFI), https://github.com/hyperpolymath/developer-ecosystem[developer-ecosystem] (Zig ecosystem tooling)
+
+| **`So` non-null proofs** | https://github.com/hyperpolymath/ephapax[ephapax] (linear type system proofs), https://github.com/hyperpolymath/stapeln[stapeln] (ABI proofs)
+
+| **GDPR consent classification** | https://github.com/hyperpolymath/social-media-tools[social-media-tools], https://github.com/hyperpolymath/universal-chat-extractor[universal-chat-extractor]
+
+| **JSONL storage** | https://github.com/hyperpolymath/verisimdb[verisimdb] (VeriSimDB uses append-only log files)
+|===
 
 == File Map
 
 [cols="1,2"]
 |===
-| Path | What's There
+| Path | Proves
 
-| `src/` | Source code
-| `test(s)/` | Test suite
+| `src/interface/abi/Types.idr` | Complete ABI type system: Cookie, Handle (non-null proof), SameSitePolicy, RuleAction, ConsentCategory, BrowserType, ProtectionRule, CookieAnalysis, enum round-trip proofs, memory layout proofs
+
+| `src/interface/abi/Layout.idr` | Platform-specific memory layout verification for the Cookie struct (72-byte layout, 8-byte alignment)
+
+| `src/interface/abi/Foreign.idr` | All %foreign C bindings with prim__ primitives and safe Idris2 wrappers: init, free, store, get, list, delete, addRule, applyRules, analyse, exportBrowser, importBrowser, isInitialized, version, lastError
+
+| `src/interface/ffi/src/main.zig` | Zig C-ABI implementation of all cookie_rebound_* functions; actual JSONL storage, glob matching, cookie analysis logic
+
+| `src/interface/ffi/build.zig` | Zig build system: compiles libcookie_rebound.{a,so} for the host platform
+
+| `src/interface/ffi/test/integration_test.zig` | Integration tests: verifies init/store/get/delete/list/analyse round-trips at the C ABI boundary
+
+| `src/interface/ffi/zig-out/lib/` | Compiled library artefacts (static + shared) from last successful build
+
+| `ffi/zig/bench/cookie_bench.zig` | Standalone Zig benchmarks for vault operations
+
+| `tests/e2e_test.sh` | Shell-based end-to-end test driving the Zig library directly
+
+| `tests/property_test.sh` | Shell-based property tests (round-trip store → get, rule application)
+
+| `src/interface/generated/abi/` | Auto-generated C headers from Idris2 ABI (pending — currently empty with .gitkeep)
+
+| `0-AI-MANIFEST.a2ml` | AI session gatekeeper — read first before modifying any file
+
+| `.machine_readable/` | A2ML state files: STATE.a2ml, ECOSYSTEM.a2ml, META.a2ml
 |===
-
-== Questions?
-
-Open an issue or reach out directly — happy to explain anything in more detail.
