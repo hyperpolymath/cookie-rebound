@@ -1,6 +1,6 @@
-// Cookie Rebound Integration Tests
 // SPDX-License-Identifier: MPL-2.0
-// Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+// Cookie Rebound Integration Tests
 //
 // These tests verify the cookie vault FFI through the exported C interface,
 // exercising the full lifecycle: init, store, get, list, delete, rules, analyse,
