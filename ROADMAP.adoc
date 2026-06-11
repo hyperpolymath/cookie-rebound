@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 = cookie-rebound Roadmap
 :toc:
 :toclevels: 3
@@ -72,7 +73,7 @@ cookie-rebound verifies that website cookie consent banners actually do what the
 
 == License & Governance
 
-**License:** MPL-2.0 (Palimpsest License)
+**License:** MPL-2.0 (MPL-2.0)
 
 **Author:** Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
