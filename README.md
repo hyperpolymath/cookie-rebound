@@ -1,69 +1,74 @@
-[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-pink?logo=github)](https://github.com/sponsors/hyperpolymath)
-<!-- Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk> -->
+<!--
+SPDX-License-Identifier: CC-BY-SA-4.0
+SPDX-FileCopyrightText: 2025-2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+-->
 
-// SPDX-License-Identifier: CC-BY-SA-4.0
-= cookie-rebound
-Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
-:toc:
-:toc-placement: preamble
+Jonathan D.A. Jewell \<[j.d.a.jewell@open.ac](j.d.a.jewell@open.ac).uk\>
+:toc: :toc-placement: preamble
 
-HTTP cookie vault with formally verified ABI — Idris2 dependent types prove handle
-validity and enum round-trips; Zig FFI implements the C-compatible storage layer.
+HTTP cookie vault with formally verified ABI — Idris2 dependent types
+prove handle validity and enum round-trips; Zig FFI implements the
+C-compatible storage layer.
 
-== Overview
+# Overview
 
-`cookie-rebound` stores, retrieves, lists, deletes, and analyses HTTP cookies by
-domain, and applies selective protection rules (protect / ignore / delete by glob
-pattern). The interface contract is specified in Idris2 with dependent-type proofs;
-the implementation is a zero-dependency Zig library that compiles to
-`libcookie_rebound.{a,so}`.
+`cookie-rebound` stores, retrieves, lists, deletes, and analyses HTTP
+cookies by domain, and applies selective protection rules (protect /
+ignore / delete by glob pattern). The interface contract is specified in
+Idris2 with dependent-type proofs; the implementation is a
+zero-dependency Zig library that compiles to `libcookie_rebound.{a,so}`.
 
 Key correctness properties verified at compile time:
 
-* Every enum type (`Result`, `SameSitePolicy`, `RuleAction`, `ConsentCategory`,
-  `BrowserType`) has a machine-checked round-trip proof — no integer value can be
-  silently misinterpreted when crossing the C ABI boundary.
-* The `Handle` type carries `So (ptr /= 0)` — null handles are rejected by the
-  type system before they reach C.
-* `cookieAlignment` proves `HasAlignment Cookie 8` across platforms — the 72-byte
-  struct layout is machine-verified.
+- Every enum type (`Result`, `SameSitePolicy`, `RuleAction`,
+  `ConsentCategory`, `BrowserType`) has a machine-checked round-trip
+  proof — no integer value can be silently misinterpreted when crossing
+  the C ABI boundary.
 
-== Architecture
+- The `Handle` type carries `So` `(ptr` `/=` `0)` — null handles are
+  rejected by the type system before they reach C.
 
-[cols="1,3"]
-|===
-| Layer | Detail
+- `cookieAlignment` proves `HasAlignment` `Cookie` `8` across platforms
+  — the 72-byte struct layout is machine-verified.
 
-| *ABI* | Idris2 (`src/interface/abi/`) — `Types.idr`, `Layout.idr`, `Foreign.idr`
-| *FFI* | Zig (`src/interface/ffi/src/main.zig`) — JSONL storage, glob matching, cookie analysis
-| *Headers* | Auto-generated C headers from Idris2 ABI (`src/interface/generated/abi/`)
-| *Tests* | `src/interface/ffi/test/integration_test.zig` + `tests/e2e_test.sh`
-|===
+# Architecture
 
-The call chain is: Idris2 safe wrapper → `%foreign "C:cookie_rebound_store,
-libcookie_rebound"` → Zig implementation → JSONL storage file. The Zig layer
-owns all memory allocation; Idris2 wrappers call `prim__freeString` immediately
-after consuming each returned C-string pointer.
+| Layer | Detail |
+|----|----|
+| **ABI** | Idris2 (`src/interface/abi/`) — `Types.idr`, `Layout.idr`, `Foreign.idr` |
+| **FFI** | Zig (`src/interface/ffi/src/main.zig`) — JSONL storage, glob matching, cookie analysis |
+| **Headers** | Auto-generated C headers from Idris2 ABI (`src/interface/generated/abi/`) |
+| **Tests** | `src/interface/ffi/test/integration_test.zig` + `tests/e2e_test.sh` |
 
-== Cookie Analysis
+The call chain is: Idris2 safe wrapper → `%foreign`
+`"C:cookie_rebound_store,` `libcookie_rebound"` → Zig implementation →
+JSONL storage file. The Zig layer owns all memory allocation; Idris2
+wrappers call `prim__freeString` immediately after consuming each
+returned C-string pointer.
 
-The `cookie_rebound_analyse` function produces a `CookieAnalysis` record with:
+# Cookie Analysis
 
-* `isTracker` — likely fingerprinting or ad-network cookie (heuristic, pattern-based)
-* `isExpired` — past its Unix timestamp
-* `crossSiteRisk` — `SameSite=None` without `Secure`
-* `consentCategory` — GDPR/ePrivacy classification: Necessary / Functional /
-  Analytics / Marketing / Unknown
+The `cookie_rebound_analyse` function produces a `CookieAnalysis` record
+with:
 
-== Building
+- `isTracker` — likely fingerprinting or ad-network cookie (heuristic,
+  pattern-based)
 
-[source,sh]
-----
+- `isExpired` — past its Unix timestamp
+
+- `crossSiteRisk` — `SameSite=None` without `Secure`
+
+- `consentCategory` — GDPR/ePrivacy classification: Necessary /
+  Functional / Analytics / Marketing / Unknown
+
+# Building
+
+```sh
 cd src/interface/ffi
 zig build
 # → zig-out/lib/libcookie_rebound.{a,so}
-----
+```
 
-== License
+# License
 
-MPL-2.0. See link:LICENSE[LICENSE].
+MPL-2.0. See [LICENSE](LICENSE).
