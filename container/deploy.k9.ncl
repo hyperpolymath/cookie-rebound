@@ -144,7 +144,14 @@ echo "K9: Rollback complete."
 
 # Export the component
 {
-  pedigree = component_pedigree,
+  # Surface the required K9 identity and leash fields on the exported pedigree
+  # while retaining the full five-layer component record.
+  pedigree = component_pedigree & {
+    name = component_pedigree.metadata.name,
+    version = component_pedigree.metadata.version,
+    leash = 'Hunt,
+    signature = component_pedigree.security.signature,
+  },
   deployment = deployment,
   scripts = scripts,
 
