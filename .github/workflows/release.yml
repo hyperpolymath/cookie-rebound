@@ -21,7 +21,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.1
       - name: Build
         run: |
           echo "Build your artifacts here"
@@ -46,7 +46,7 @@ jobs:
       changelog: ${{ steps.cliff.outputs.content }}
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
       - name: Extract version from tag
@@ -71,7 +71,7 @@ jobs:
         run: |
           git cliff --output CHANGELOG.md
       - name: Upload updated CHANGELOG.md
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: changelog
           path: CHANGELOG.md
@@ -84,14 +84,14 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.1
       # TODO: Download build artifacts if uploading to the release
       # - uses: actions/download-artifact@v4
       #   with:
       #     name: release-artifacts
       #     path: artifacts/
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2.5.0
+        uses: softprops/action-gh-release@v3.0.3
         with:
           body: ${{ needs.changelog.outputs.changelog }}
           draft: false
