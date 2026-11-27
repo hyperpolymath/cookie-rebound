@@ -49,9 +49,3 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-
-  # Guix flakes
-  - package-ecosystem: "guix"
-    directory: "/"
-    schedule:
-      interval: "weekly"
