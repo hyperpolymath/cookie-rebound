@@ -2,7 +2,7 @@
 # Language runtimes
 rust = "latest"
 zig = "latest"
-bun = "latest"
+bun = "1.4"
 denojs = "latest"
 
 # Package managers
@@ -38,10 +38,12 @@ description = "Install pinned JS dev tools (Prettier) from bun.lock"
 run = "bun install --frozen-lockfile"
 
 [tasks.build]
-run = "cargo build --release"
+dir = "src/interface/ffi"
+run = "zig build -Doptimize=ReleaseFast"
 
 [tasks.test]
-run = "cargo test"
+dir = "src/interface/ffi"
+run = "zig build test-all"
 
 [tasks.lint]
 depends = ["setup"]
